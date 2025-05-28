@@ -5,6 +5,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +29,8 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/products")
 public class ProductController {
 
+    private static final Logger logger = LoggerFactory.getLogger(ProductController.class);
+    
     private final ProductService productService;
 
     @Autowired
@@ -36,16 +40,19 @@ public class ProductController {
 
     @GetMapping
     public ResponseEntity<List<Product>> getAllProducts() {
+        logger.info("REST request to get all products");
         return ResponseEntity.ok(productService.getAllProducts());
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Product> getProductById(@PathVariable Long id) {
+        logger.info("REST request to get product with id: {}", id);
         return ResponseEntity.ok(productService.getProductById(id));
     }
 
     @GetMapping("/search")
     public ResponseEntity<List<Product>> searchProducts(@RequestParam String name) {
+        logger.info("REST request to search products with name containing: {}", name);
         return ResponseEntity.ok(productService.searchByName(name));
     }
 
@@ -53,16 +60,19 @@ public class ProductController {
     public ResponseEntity<List<Product>> getProductsByPriceRange(
             @RequestParam BigDecimal min, 
             @RequestParam BigDecimal max) {
+        logger.info("REST request to get products with price between {} and {}", min, max);
         return ResponseEntity.ok(productService.findByPriceRange(min, max));
     }
 
     @GetMapping("/in-stock")
     public ResponseEntity<List<Product>> getProductsInStock() {
+        logger.info("REST request to get products in stock");
         return ResponseEntity.ok(productService.findInStock());
     }
 
     @PostMapping
     public ResponseEntity<Product> createProduct(@Valid @RequestBody Product product) {
+        logger.info("REST request to create product: {}", product.getName());
         return new ResponseEntity<>(productService.createProduct(product), HttpStatus.CREATED);
     }
 
@@ -70,11 +80,13 @@ public class ProductController {
     public ResponseEntity<Product> updateProduct(
             @PathVariable Long id, 
             @Valid @RequestBody Product productDetails) {
+        logger.info("REST request to update product with id: {}", id);
         return ResponseEntity.ok(productService.updateProduct(id, productDetails));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Boolean>> deleteProduct(@PathVariable Long id) {
+        logger.info("REST request to delete product with id: {}", id);
         productService.deleteProduct(id);
         Map<String, Boolean> response = new HashMap<>();
         response.put("deleted", true);
@@ -83,6 +95,7 @@ public class ProductController {
 
     @GetMapping("/health")
     public ResponseEntity<String> healthCheck() {
-        return ResponseEntity.ok("Service is up and running with Aurora MySQL connection!");
+        logger.info("Health check requested");
+        return ResponseEntity.ok("Service is up and running with Aurora MySQL connection and S3 integration!");
     }
 }

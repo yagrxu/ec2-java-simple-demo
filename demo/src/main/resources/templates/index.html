@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="fragments/layout :: head('Product Management Dashboard')">
+    <title>Product Management</title>
+</head>
+<body>
+    <nav th:replace="fragments/layout :: navbar"></nav>
+    
+    <div class="container mt-4">
+        <div th:replace="fragments/layout :: messages"></div>
+        
+        <div class="jumbotron bg-light p-5 rounded">
+            <h1 class="display-4">Product Management System</h1>
+            <p class="lead">A demo application showcasing Spring Boot with AWS integration</p>
+            <hr class="my-4">
+            <p>This application demonstrates database operations and S3 integration with full observability using OpenTelemetry.</p>
+            <a class="btn btn-primary btn-lg" th:href="@{/products}" role="button">View Products</a>
+        </div>
+        
+        <div class="row mt-5">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Database Operations</h5>
+                        <p class="card-text">Create, read, update, and delete products in the MySQL database.</p>
+                        <a th:href="@{/products}" class="btn btn-outline-primary">Manage Products</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">S3 Integration</h5>
+                        <p class="card-text">Products are automatically stored as JSON files in S3.</p>
+                        <a th:href="@{/products/new}" class="btn btn-outline-primary">Create Product</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">API Access</h5>
+                        <p class="card-text">Access the REST API endpoints for programmatic integration.</p>
+                        <a th:href="@{/api/products}" target="_blank" class="btn btn-outline-primary">View API</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="api-section mt-5">
+            <h3 class="api-title">Available API Endpoints</h3>
+            <table class="table table-striped">
+                <thead class="table-header">
+                    <tr>
+                        <th>Method</th>
+                        <th>URL</th>
+                        <th>Description</th>
+                        <th>Try</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>GET</td>
+                        <td>/api/products</td>
+                        <td>Get all products</td>
+                        <td><a th:href="@{/api/products}" target="_blank" class="btn btn-sm btn-outline-primary">Try</a></td>
+                    </tr>
+                    <tr>
+                        <td>GET</td>
+                        <td>/api/products/{id}</td>
+                        <td>Get product by ID</td>
+                        <td>
+                            <form class="d-flex" onsubmit="window.open('/api/products/' + document.getElementById('apiProductId').value, '_blank'); return false;">
+                                <input type="number" id="apiProductId" class="form-control form-control-sm me-2" placeholder="ID" style="width: 80px;" required>
+                                <button type="submit" class="btn btn-sm btn-outline-primary">Try</button>
+                            </form>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>GET</td>
+                        <td>/api/products/search?name={name}</td>
+                        <td>Search products by name</td>
+                        <td>
+                            <form class="d-flex" onsubmit="window.open('/api/products/search?name=' + document.getElementById('apiSearchName').value, '_blank'); return false;">
+                                <input type="text" id="apiSearchName" class="form-control form-control-sm me-2" placeholder="Name" style="width: 120px;" required>
+                                <button type="submit" class="btn btn-sm btn-outline-primary">Try</button>
+                            </form>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>GET</td>
+                        <td>/api/products/in-stock</td>
+                        <td>Get products in stock</td>
+                        <td><a th:href="@{/api/products/in-stock}" target="_blank" class="btn btn-sm btn-outline-primary">Try</a></td>
+                    </tr>
+                    <tr>
+                        <td>GET</td>
+                        <td>/api/products/health</td>
+                        <td>Health check</td>
+                        <td><a th:href="@{/api/products/health}" target="_blank" class="btn btn-sm btn-outline-primary">Try</a></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <footer th:replace="fragments/layout :: footer"></footer>
+</body>
+</html>

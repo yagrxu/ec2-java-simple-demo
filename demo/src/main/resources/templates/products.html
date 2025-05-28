@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="fragments/layout :: head('Product Management')">
+    <title>Product Management</title>
+</head>
+<body>
+    <nav th:replace="fragments/layout :: navbar"></nav>
+    
+    <div class="container mt-4">
+        <h1 class="page-title">Product Management</h1>
+        
+        <div th:replace="fragments/layout :: messages"></div>
+        
+        <!-- Search and Filter Options -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <form th:action="@{/products/search}" method="get" class="d-flex">
+                    <input type="text" name="name" class="form-control me-2" placeholder="Search by name" th:value="${searchTerm}">
+                    <button type="submit" class="btn btn-primary">Search</button>
+                </form>
+            </div>
+            <div class="col-md-5">
+                <form th:action="@{/products/price-range}" method="get" class="d-flex">
+                    <input type="number" name="min" class="form-control me-2" placeholder="Min price" step="0.01" th:value="${minPrice}" required>
+                    <input type="number" name="max" class="form-control me-2" placeholder="Max price" step="0.01" th:value="${maxPrice}" required>
+                    <button type="submit" class="btn btn-primary">Filter</button>
+                </form>
+            </div>
+            <div class="col-md-3">
+                <div class="d-flex justify-content-end">
+                    <a th:href="@{/products/in-stock}" class="btn btn-outline-primary me-2">In Stock Only</a>
+                    <a th:href="@{/products}" class="btn btn-outline-secondary me-2">All Products</a>
+                    <a th:href="@{/products/new}" class="btn btn-success">Add Product</a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Products Table -->
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Description</th>
+                        <th>Price</th>
+                        <th>Stock</th>
+                        <th>Created</th>
+                        <th>Updated</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:if="${products.empty}">
+                        <td colspan="8" class="text-center">No products found</td>
+                    </tr>
+                    <tr th:each="product : ${products}">
+                        <td th:text="${product.id}"></td>
+                        <td th:text="${product.name}"></td>
+                        <td th:text="${product.description}"></td>
+                        <td class="price-display" th:text="${'$' + product.price}"></td>
+                        <td>
+                            <span th:text="${product.stockQuantity}"></span>
+                            <span th:if="${product.stockQuantity > 0}" class="badge bg-success badge-stock">In Stock</span>
+                            <span th:if="${product.stockQuantity == 0}" class="badge bg-danger badge-stock">Out of Stock</span>
+                        </td>
+                        <td class="timestamp" th:text="${#temporals.format(product.createdAt, 'yyyy-MM-dd HH:mm')}"></td>
+                        <td class="timestamp" th:text="${#temporals.format(product.updatedAt, 'yyyy-MM-dd HH:mm')}"></td>
+                        <td class="action-buttons">
+                            <a th:href="@{/products/edit/{id}(id=${product.id})}" class="btn btn-sm btn-primary">Edit</a>
+                            <a th:href="@{/products/delete/{id}(id=${product.id})}" class="btn btn-sm btn-danger" 
+                               onclick="return confirm('Are you sure you want to delete this product?')">Delete</a>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <footer th:replace="fragments/layout :: footer"></footer>
+</body>
+</html>

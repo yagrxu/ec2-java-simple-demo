@@ -10,7 +10,10 @@ import com.example.model.Product;
 
 @Repository
 public interface ProductRepository extends JpaRepository<Product, Long> {
+    
     List<Product> findByNameContainingIgnoreCase(String name);
+    
     List<Product> findByPriceBetween(BigDecimal min, BigDecimal max);
+    
     List<Product> findByStockQuantityGreaterThan(Integer quantity);
 }
