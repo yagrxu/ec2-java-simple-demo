@@ -15,7 +15,7 @@ ENDPOINTS=(
   "/api/products/health"
   "/api/products/in-stock"
   "/api/products/search?name=a"
-  "/api/products/price-range?min=0&max=1000"
+  "/api/products/price?min=0&max=1000"
 )
 
 # Product IDs to test (will be populated dynamically)
