@@ -64,7 +64,7 @@ export class CdkStack extends cdk.Stack {
     
     // create a SNS Topic for notifications
     const snsTopic = new cdk.aws_sns.Topic(this, 'NotificationTopic', {
-      topicName: 'demo-ops-topic'
+      topicName: `${cdk.Stack.of(this).stackName}-ops-topic`
     })
 
     // create ec2 profile
@@ -157,13 +157,13 @@ export class CdkStack extends cdk.Stack {
       retainOnDelete: false
     });
 
-        const alb = new cdk.aws_elasticloadbalancingv2.ApplicationLoadBalancer(
+    const alb = new cdk.aws_elasticloadbalancingv2.ApplicationLoadBalancer(
       this,
       'ALB',
       {
         vpc: vpc,
         internetFacing: true,
-        loadBalancerName: 'sample-demo',
+        loadBalancerName: `${cdk.Stack.of(this).stackName}-alb`,
         securityGroup: securityGroup
       }
     )
