@@ -463,7 +463,7 @@ export class CdkStack extends cdk.Stack {
       'Type=simple',
       'User=root',
       'WorkingDirectory=/opt/app',
-      'Environment="OTEL_RESOURCE_ATTRIBUTES=service.name=demo-app,service.namespace=demo"',
+      `Environment="OTEL_RESOURCE_ATTRIBUTES=service.name=${cdk.Stack.of(this).stackName}-app,service.namespace=demo"`,
       'Environment="OTEL_METRICS_EXPORTER=otlp"',
       'Environment="OTEL_TRACES_EXPORTER=otlp"',
       'Environment="OTEL_LOGS_EXPORTER=otlp"',
