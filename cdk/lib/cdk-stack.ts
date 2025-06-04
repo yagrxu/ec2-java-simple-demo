@@ -276,6 +276,8 @@ export class CdkStack extends cdk.Stack {
       engine: rds.DatabaseClusterEngine.auroraMysql({
         version: rds.AuroraMysqlEngineVersion.VER_3_08_1, // Aurora MySQL 8.0
       }),
+      databaseInsightsMode: rds.DatabaseInsightsMode.ADVANCED, // Enable database insights
+      performanceInsightRetention: rds.PerformanceInsightRetention.MONTHS_15,
       credentials: rds.Credentials.fromGeneratedSecret('admin'), // Optional - for RDS, you can also use Secrets Manager
       instanceProps: {
         vpc,
@@ -284,11 +286,11 @@ export class CdkStack extends cdk.Stack {
         },
         securityGroups: [securityGroup],
         instanceType: ec2.InstanceType.of(
-          ec2.InstanceClass.BURSTABLE3,
+          ec2.InstanceClass.BURSTABLE4_GRAVITON,
           ec2.InstanceSize.LARGE
         ),
       },
-      instances: 2, // Writer + Reader
+      instances: 1, // Writer + Reader
       defaultDatabaseName: 'products_db',
       backup: {
         retention: cdk.Duration.days(7),
