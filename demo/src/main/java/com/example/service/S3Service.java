@@ -1,28 +1,41 @@
 package com.example.service;
 
-import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.PutObjectRequest;
-import com.example.model.Product;
+import java.nio.charset.StandardCharsets;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.io.ByteArrayInputStream;
-import java.nio.charset.StandardCharsets;
+import com.example.model.Product;
+
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 @Service
 public class S3Service {
 
     private static final Logger logger = LoggerFactory.getLogger(S3Service.class);
     
-    private final AmazonS3 s3Client;
+    private final S3Client s3Client;
     private final String bucketName;
 
-    public S3Service(@Value("${data.bucket.name}") String bucketName) {
-        this.s3Client = AmazonS3ClientBuilder.standard().build();
+    public S3Service(
+            @Value("${data.bucket.name}") String bucketName,
+            @Value("${aws.region:us-east-1}") String regionName) {
+        
+        Region region = Region.of(regionName);
+        logger.info("Initializing S3 client with region: {}", region.id());
+        
+        this.s3Client = S3Client.builder()
+                .region(region)
+                .build();
         this.bucketName = bucketName;
         logger.info("S3Service initialized with bucket: {}", bucketName);
     }
@@ -48,19 +61,16 @@ public class S3Service {
             );
             
             // Upload to S3
-            byte[] contentBytes = content.getBytes(StandardCharsets.UTF_8);
-            ObjectMetadata metadata = new ObjectMetadata();
-            metadata.setContentLength(contentBytes.length);
-            metadata.setContentType("application/json");
-            
             String key = "products/" + product.getId() + ".json";
             
-            s3Client.putObject(new PutObjectRequest(
-                bucketName,
-                key,
-                new ByteArrayInputStream(contentBytes),
-                metadata
-            ));
+            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+                .bucket(bucketName)
+                .key(key)
+                .contentType("application/json")
+                .build();
+                
+            s3Client.putObject(putObjectRequest, 
+                RequestBody.fromString(content, StandardCharsets.UTF_8));
             
             logger.info("Product {} saved to S3 at {}/{}", product.getId(), bucketName, key);
         } catch (Exception e) {
@@ -69,16 +79,46 @@ public class S3Service {
         }
     }
     
+    public String getProductFromS3(Long productId) {
+        try {
+            String key = "products/" + productId + ".json";
+            
+            GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+                .bucket(bucketName)
+                .key(key)
+                .build();
+                
+            return s3Client.getObjectAsBytes(getObjectRequest).asUtf8String();
+        } catch (Exception e) {
+            logger.error("Error retrieving product from S3", e);
+            return null;
+        }
+    }
+    
     public boolean deleteProductFromS3(Long productId) {
         try {
             logger.info("Deleting product from S3: {}", productId);
             String key = "products/" + productId + ".json";
             
-            if (s3Client.doesObjectExist(bucketName, key)) {
-                s3Client.deleteObject(bucketName, key);
+            // Check if object exists
+            try {
+                HeadObjectRequest headObjectRequest = HeadObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(key)
+                    .build();
+                    
+                s3Client.headObject(headObjectRequest);
+                
+                // If we get here, the object exists, so delete it
+                DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(key)
+                    .build();
+                    
+                s3Client.deleteObject(deleteObjectRequest);
                 logger.info("Product {} deleted from S3", productId);
                 return true;
-            } else {
+            } catch (NoSuchKeyException e) {
                 logger.warn("Product {} not found in S3", productId);
                 return false;
             }

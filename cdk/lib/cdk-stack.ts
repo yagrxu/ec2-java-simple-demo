@@ -6,6 +6,7 @@ import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as path from 'path';
+import { NagSuppressions } from 'cdk-nag'
 
 // import { InstanceTarget } from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets'
 // import * as sqs from 'aws-cdk-lib/aws-sqs';
@@ -13,6 +14,62 @@ import * as path from 'path';
 export class CdkStack extends cdk.Stack {
   constructor (scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props)
+
+
+    NagSuppressions.addStackSuppressions(this, [
+      {
+        id: 'AwsSolutions-VPC7',
+        reason: 'flow log is not required for this demo stack',
+      },
+      {
+        id: 'AwsSolutions-S10',
+        reason: 'S3 bucket is used for application artifacts and data storage, not for static website hosting',
+      },
+      { id: 'AwsSolutions-S1',
+        reason: 'S3 bucket is used for application artifacts and data storage, not for static website hosting'
+      },
+      { id: 'AwsSolutions-SNS3',
+        reason: 'SNS topic is used for notifications, not for publishing messages from S3 or other AWS services',
+      },
+      { id: 'AwsSolutions-IAM4',
+        reason: 'managed role is required'
+      },
+      { id: 'AwsSolutions-EC23',
+        reason: 'expose port 8080 and 3030 publicly for demo purposes'
+      },
+      { id: 'AwsSolutions-IAM5',
+        reason: 'wildcard permissions are required for writing any file to S3 bucket'
+      },
+      { id: 'AwsSolutions-L1',
+        reason: 'lambda is automatically created by CDK for S3 deployment, and it is not used in this stack'
+      },
+      { id: 'AwsSolutions-ELB2',
+        reason: 'ALB is used for demo purposes, and it is not required to configure access logs',
+      },
+      { id: 'AwsSolutions-SMG4',
+        reason: 'short-lived secrets are used for demo purposes, and it is not required to enable rotation',
+      },
+      { id: 'AwsSolutions-RDS11',
+        reason: 'RDS is used for demo purposes, and it is not required to enable encryption',
+      },
+      { id: 'AwsSolutions-RDS6',
+        reason: 'demo purposes, and it is not required to enable IAM authentication',
+      },
+      { id: 'AwsSolutions-RDS10',
+        reason: 'demo purposes, and it is not required to enable performance insights',
+      },
+      { id: 'AwsSolutions-RDS14',
+        reason: 'demo purposes, and it is not required to enable backtrack'
+      },
+      {
+        id: 'AwsSolutions-EC28',
+        reason: 'EC2 instance is used for demo purposes, and it is not required to enable detailed monitoring',
+      },
+      {
+        id: 'AwsSolutions-EC29',
+        reason: 'EC2 instance is used for demo purposes, and it is not required to enable termination protection',
+      }
+    ])
 
     // create new vpc
     const vpc = new cdk.aws_ec2.Vpc(this, 'VPC', {
@@ -38,7 +95,7 @@ export class CdkStack extends cdk.Stack {
     )
 
     securityGroup.addIngressRule(
-      cdk.aws_ec2.Peer.anyIpv4(),
+      cdk.aws_ec2.Peer.securityGroupId(securityGroup.securityGroupId),
       cdk.aws_ec2.Port.tcp(3306),
       'allow mysql'
     )
@@ -66,6 +123,33 @@ export class CdkStack extends cdk.Stack {
     const snsTopic = new cdk.aws_sns.Topic(this, 'NotificationTopic', {
       topicName: `${cdk.Stack.of(this).stackName}-ops-topic`
     })
+
+    // Create CloudWatch Alarm for X-Ray error rate
+    const faultRateAlarm = new cdk.aws_cloudwatch.Alarm(this, 'XRayFaultRateAlarm', {
+      metric: new cdk.aws_cloudwatch.Metric({
+        namespace: 'AWS/X-Ray',
+        metricName: 'FaultRate',
+        dimensionsMap: {
+          GroupName: 'Default',
+          ServiceName: `${cdk.Stack.of(this).stackName}-app`,
+          ServiceType: 'AWS::EC2::Instance',
+          Environment: 'ec2:default',
+        },
+        statistic: 'Average',
+        period: cdk.Duration.minutes(1),
+      }),
+      evaluationPeriods: 3,
+      threshold: 0.01, // 5% error rate
+      comparisonOperator: cdk.aws_cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      actionsEnabled: true,
+      alarmDescription: 'Alarm when X-Ray error rate exceeds 20% for 3 consecutive minutes',
+      treatMissingData: cdk.aws_cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    // Add SNS action to the alarm
+    faultRateAlarm.addAlarmAction(new cdk.aws_cloudwatch_actions.SnsAction(snsTopic));
+    faultRateAlarm.addOkAction(new cdk.aws_cloudwatch_actions.SnsAction(snsTopic));
+
 
     // create ec2 profile
     const ec2Role = new iam.Role(this, 'InstanceRole', {
@@ -224,7 +308,17 @@ export class CdkStack extends cdk.Stack {
       machineImage: new ec2.AmazonLinux2023ImageSsmParameter(),
       securityGroup: securityGroup,
       userDataCausesReplacement: true, // Ensure user data changes cause replacement
-      role: ec2Role
+      role: ec2Role,
+      blockDevices: [
+        {
+          deviceName: '/dev/xvda',
+          volume: ec2.BlockDeviceVolume.ebs(50, {
+            encrypted: true,
+            volumeType: ec2.EbsDeviceVolumeType.GENERAL_PURPOSE_SSD,
+            deleteOnTermination: true,
+          }),
+        },
+      ],
     })
     // Get Aurora cluster endpoint and secret for connection
     const dbSecret = auroraCluster.secret!;

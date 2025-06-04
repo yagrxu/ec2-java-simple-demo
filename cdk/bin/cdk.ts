@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { CdkStack } from '../lib/cdk-stack';
+import { AwsSolutionsChecks } from 'cdk-nag'
+import { Aspects } from 'aws-cdk-lib';
 import { DeploymentConfig } from '../lib/const';
 
 const app = new cdk.App();
+Aspects.of(app).add(new AwsSolutionsChecks({ verbose: true }))
 
 // Get stack name from environment variables or use default
-const stackName = DeploymentConfig.getStackName('aiops-sample-app');
+const stackName = DeploymentConfig.getStackName('aiops-sample');
 
 // Create the stack with configurable name and environment
 const stack = new CdkStack(app, stackName, {
