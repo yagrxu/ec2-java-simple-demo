@@ -77,27 +77,48 @@ export class CdkStack extends cdk.Stack {
       natGateways: 1
     })
     
-    // create security group
-    const securityGroup = new cdk.aws_ec2.SecurityGroup(this, 'SecurityGroup', {
+    // Create separate security groups for each component
+    // EC2 Security Group
+    const ec2SecurityGroup = new cdk.aws_ec2.SecurityGroup(this, 'EC2SecurityGroup', {
       vpc: vpc,
       allowAllOutbound: true,
-      securityGroupName: 'sample-demo-sg'
+      securityGroupName: 'sample-demo-ec2-sg'
     })
-    securityGroup.addIngressRule(
+    ec2SecurityGroup.addIngressRule(
       cdk.aws_ec2.Peer.anyIpv4(),
       cdk.aws_ec2.Port.tcp(8080),
       'Allow HTTP traffic from anywhere'
     )
-    securityGroup.addIngressRule(
+    ec2SecurityGroup.addIngressRule(
       cdk.aws_ec2.Peer.anyIpv4(),
       cdk.aws_ec2.Port.tcp(3030),
       'Allow HTTP traffic from anywhere'
     )
-
-    securityGroup.addIngressRule(
-      cdk.aws_ec2.Peer.securityGroupId(securityGroup.securityGroupId),
+    
+    // ALB Security Group
+    const albSecurityGroup = new cdk.aws_ec2.SecurityGroup(this, 'ALBSecurityGroup', {
+      vpc: vpc,
+      allowAllOutbound: true,
+      securityGroupName: 'sample-demo-alb-sg'
+    })
+    albSecurityGroup.addIngressRule(
+      cdk.aws_ec2.Peer.anyIpv4(),
+      cdk.aws_ec2.Port.tcp(3030),
+      'Allow HTTP traffic from anywhere'
+    )
+    
+    // RDS Security Group
+    const rdsSecurityGroup = new cdk.aws_ec2.SecurityGroup(this, 'RDSSecurityGroup', {
+      vpc: vpc,
+      allowAllOutbound: true,
+      securityGroupName: 'sample-demo-rds-sg'
+    })
+    
+    // Allow EC2 to connect to RDS
+    rdsSecurityGroup.addIngressRule(
+      cdk.aws_ec2.Peer.securityGroupId(ec2SecurityGroup.securityGroupId),
       cdk.aws_ec2.Port.tcp(3306),
-      'allow mysql'
+      'Allow MySQL traffic from EC2'
     )
 
     // Create a S3 bucket for application artifacts
@@ -248,7 +269,7 @@ export class CdkStack extends cdk.Stack {
         vpc: vpc,
         internetFacing: true,
         loadBalancerName: `${cdk.Stack.of(this).stackName}-alb`,
-        securityGroup: securityGroup
+        securityGroup: albSecurityGroup
       }
     )
 
@@ -271,20 +292,32 @@ export class CdkStack extends cdk.Stack {
         }
       )
 
-    // create a aurora mysql RDS
+    // Create Aurora cluster secret first, before any resources that depend on it
+    const auroraSecret = new cdk.aws_secretsmanager.Secret(this, 'AuroraSecret', {
+      secretName: `${cdk.Stack.of(this).stackName}-aurora-secret`,
+      generateSecretString: {
+        secretStringTemplate: JSON.stringify({ username: 'admin' }),
+        generateStringKey: 'password',
+        excludePunctuation: true,
+        includeSpace: false,
+        passwordLength: 16
+      }
+    });
+    
+    // create a aurora mysql RDS with explicit credentials from our pre-created secret
     const auroraCluster = new rds.DatabaseCluster(this, 'AuroraCluster', {
       engine: rds.DatabaseClusterEngine.auroraMysql({
         version: rds.AuroraMysqlEngineVersion.VER_3_08_1, // Aurora MySQL 8.0
       }),
       databaseInsightsMode: rds.DatabaseInsightsMode.ADVANCED, // Enable database insights
       performanceInsightRetention: rds.PerformanceInsightRetention.MONTHS_15,
-      credentials: rds.Credentials.fromGeneratedSecret('admin'), // Optional - for RDS, you can also use Secrets Manager
+      credentials: rds.Credentials.fromSecret(auroraSecret), // Use our pre-created secret
       instanceProps: {
         vpc,
         vpcSubnets: {
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
-        securityGroups: [securityGroup],
+        securityGroups: [rdsSecurityGroup],
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.BURSTABLE4_GRAVITON,
           ec2.InstanceSize.LARGE
@@ -308,7 +341,7 @@ export class CdkStack extends cdk.Stack {
       vpc: vpc,
       instanceType: new ec2.InstanceType('t3.large'),
       machineImage: new ec2.AmazonLinux2023ImageSsmParameter(),
-      securityGroup: securityGroup,
+      securityGroup: ec2SecurityGroup,
       userDataCausesReplacement: true, // Ensure user data changes cause replacement
       role: ec2Role,
       blockDevices: [
@@ -323,7 +356,7 @@ export class CdkStack extends cdk.Stack {
       ],
     })
     // Get Aurora cluster endpoint and secret for connection
-    const dbSecret = auroraCluster.secret!;
+    const dbSecret = auroraSecret;
     
     // Add user data script to set up and run the Java application
     instance1.addUserData(
@@ -440,7 +473,7 @@ export class CdkStack extends cdk.Stack {
       // Get database credentials from Secrets Manager
       `SECRET_ARN="${dbSecret.secretArn}"`,
       'DB_SECRET=$(aws secretsmanager get-secret-value --secret-id $SECRET_ARN --query SecretString --output text)',
-      'DB_HOST=$(echo $DB_SECRET | jq -r .host)',
+      'DB_HOST=$(echo $DB_SECRET | jq -r .host || echo "${auroraCluster.clusterEndpoint.hostname}")',
       'DB_USERNAME=$(echo $DB_SECRET | jq -r .username)',
       'DB_PASSWORD=$(echo $DB_SECRET | jq -r .password)',
       
@@ -567,8 +600,9 @@ export class CdkStack extends cdk.Stack {
       'Environment="OTEL_EXPORTER_OTLP_PROTOCOL=grpc"',
       'Environment="OTEL_PROPAGATORS=tracecontext,baggage,xray"',
       'Environment="OTEL_IMR_EXPORT_INTERVAL=60000"',
-      // Pass the data bucket name as an environment variable
+      // Pass the data bucket name and region as environment variables
       `Environment="DATA_BUCKET_NAME=${dataBucket.bucketName}"`,
+      `Environment="AWS_REGION=${cdk.Stack.of(this).region}"`,
       'Environment="JAVA_TOOL_OPTIONS=-Dlogging.file.path=/opt/app/logs -Dlogging.file.name=application.log"',
       'ExecStart=/usr/bin/java -javaagent:/opt/app/agent/aws-opentelemetry-agent.jar -jar /opt/app/app.jar --spring.datasource.url=jdbc:mysql://${DB_HOST}:3306/products_db --spring.datasource.username=${DB_USERNAME} --spring.datasource.password=${DB_PASSWORD} --server.port=3030',
       'Restart=on-failure',
